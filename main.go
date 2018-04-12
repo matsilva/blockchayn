@@ -1,20 +1,17 @@
 package main
 
 import (
+	"net/http"
+	"os"
 	"crypto/sha256"
 	"encoding/hex"
 	"time"
-	// "crypto/sha256"
-	// "encoding/hex"
-	// "encoding/json"
-	// "io"
-	// "log"
-	// "net/http"
-	// "os"
-	// "time"
-	// "github.com/davecgh/go-spew/spew"
-	// "github.com/gorilla/mux"
-	// "github.com/joho/godotenv"
+	"encoding/json"
+	"io"
+	"log"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 )
 
 type Block struct {
@@ -65,4 +62,44 @@ func isBlockValid(newBlock, oldBlock Block) bool {
 	return true
 }
 
-// left off here func isBlockValid(newBlock, oldBlock Block) bool {    <-- just search it
+func replaceChain(newBlocks []Block) {
+	if len(newBlocks) > len(BlockChain) {
+		BlockChain = newBlocks
+	}
+}
+
+// Server
+func run() error {
+	mux := makeMuxRouter()
+	httpAddr := os.Getenv("ADDR")
+	log.Println("Listening on ", os.Getenv("ADDR"))
+	s := &http.Server{
+		Addr: ":" + httpAddr,
+		Handler: mux,
+		ReadTimeout: 10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		MaxHeaderBytes: 1 << 20
+	}
+
+	if err := s.ListenAndServe(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func makeMuxRouter() http.Handler {
+	muxRouter := mux.NewRouter()
+	muxRouter.HandleFunc("/", handleGetBlockchain).Methods("GET")
+	muxRouter.HandleFunc("/", handleWriteBlock).Methods("POST")
+	return muxRouter
+}
+
+func handleGetBlockchain(w http.ResponseWriter, r *http.Request) {
+	bytes, err := json.MarshalIndent(BlockChain, "", "	")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return 
+	}
+	io.WriteString(w, string(bytes))
+}
